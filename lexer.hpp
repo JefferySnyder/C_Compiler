@@ -1,5 +1,4 @@
 #include <iostream>
-#include <fstream>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -18,6 +17,9 @@ enum class TokenType {
 	Minus,
 	Tilde,
 	Bang,
+	Plus,
+	Asterisk,
+	ForwardSlash,
 };
 std::unordered_map<std::string, TokenType> keywords{
 	{"return", TokenType::Return},
@@ -45,6 +47,9 @@ std::vector<Token> tokenize(const std::string& source) {
 		if (source[i] == '-') { tokens.push_back({ TokenType::Minus, std::string{ch} }); ++i; continue; }
 		if (source[i] == '~') { tokens.push_back({ TokenType::Tilde, std::string{ch} }); ++i; continue; }
 		if (source[i] == '!') { tokens.push_back({ TokenType::Bang, std::string{ch} }); ++i; continue; }
+		if (source[i] == '+') { tokens.push_back({ TokenType::Plus, std::string{ch} }); ++i; continue; }
+		if (source[i] == '*') { tokens.push_back({ TokenType::Asterisk, std::string{ch} }); ++i; continue; }
+		if (source[i] == '/') { tokens.push_back({ TokenType::ForwardSlash, std::string{ch} }); ++i; continue; }
 			
 		if (std::isdigit(ch)) {
 			std::string val;

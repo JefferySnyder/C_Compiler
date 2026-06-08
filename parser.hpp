@@ -1,39 +1,56 @@
+#include <unordered_set>
 #include "lexer.hpp"
 
-enum class ExprNodeType { Literal, Unary };
+enum class ASTNodeType { Function, Statement, Literal, Unary, Binary };
 
-struct ExprNode { 
-	ExprNodeType type;
-	virtual ~ExprNode() = default; 
+struct ASTNode { 
+	ASTNodeType type;
+	virtual ~ASTNode() = default; 
 };
 
-struct LiteralNode : public ExprNode {
+struct LiteralNode : public ASTNode {
 	int value;
 	LiteralNode(int val) : value{ val } {
-		type = ExprNodeType::Literal;
+		type = ASTNodeType::Literal;
 	};
 };
 
-struct UnaryNode : public ExprNode {
+struct UnaryNode : public ASTNode {
 	std::string op;
-	std::unique_ptr<ExprNode> right;
-	UnaryNode(std::string o, std::unique_ptr<ExprNode> r) 
+	std::unique_ptr<ASTNode> right;
+	UnaryNode(std::string o, std::unique_ptr<ASTNode> r) 
 		: op{ o }, right{ std::move(r) } 
 	{
-		type = ExprNodeType::Unary;
+		type = ASTNodeType::Unary;
 	};
 };
 
-struct StatementNode {
-	std::string type;
-	std::unique_ptr<ExprNode> exp;
-	StatementNode(std::string t, std::unique_ptr<ExprNode> e) : type{ t }, exp{ std::move(e) } {};
+struct BinaryNode : public ASTNode {
+	std::string op;
+	std::unique_ptr<ASTNode> left;
+	std::unique_ptr<ASTNode> right;
+	BinaryNode(std::string o, std::unique_ptr<ASTNode> l , std::unique_ptr<ASTNode> r) 
+		: op{ o }, left{ std::move(l) } , right{ std::move(r) } 
+	{
+		type = ASTNodeType::Binary;
+	};
 };
 
-struct FunctionNode {
+struct StatementNode : public ASTNode {
+	std::unique_ptr<ASTNode> exp;
+	StatementNode(std::unique_ptr<ASTNode> e) : exp{ std::move(e) }
+	{
+		type = ASTNodeType::Statement;
+	};
+};
+
+struct FunctionNode : public ASTNode {
 	std::string name;
 	std::unique_ptr<StatementNode> body;
-	FunctionNode(std::string n, std::unique_ptr<StatementNode> b) : name{ n }, body{ std::move(b) } {};
+	FunctionNode(std::string n, std::unique_ptr<StatementNode> b) : name{ n }, body{ std::move(b) }
+	{
+		type = ASTNodeType::Function;
+	}
 };
 
 
@@ -64,26 +81,48 @@ private:
 	}
 	std::unique_ptr<StatementNode> parse_stmt() {
 		// "return"
-		auto type = ensure(TokenType::Return);
+		ensure(TokenType::Return);
 		auto exp = parse_expr();
-		auto res = std::make_unique<StatementNode>(type, std::move(exp));
+		auto res = std::make_unique<StatementNode>(std::move(exp));
 		//skip ";"
 		ensure(TokenType::Semicolon);
 		return res;
 	}
-	std::unique_ptr<ExprNode> parse_expr() {
-		if (tokens[index].type == TokenType::IntegerLiteral) {
-			auto value = std::stoi(ensure(TokenType::IntegerLiteral));
-			auto res = std::make_unique<LiteralNode>(value);
+	std::unique_ptr<ASTNode> parse_expr() {
+		auto left = parse_term();
+		while (tokens[index].type == TokenType::Plus || tokens[index].type == TokenType::Minus) {
+			auto op = tokens[index++].value;
+			auto right = parse_term();
+			left = std::make_unique<BinaryNode>(op, std::move(left), std::move(right));
+		}
+		return left;
+	}
+	std::unique_ptr<ASTNode> parse_term() {
+		auto left = parse_factor();
+		while (tokens[index].type == TokenType::Asterisk || tokens[index].type == TokenType::ForwardSlash) {
+			auto op = tokens[index++].value;
+			auto right = parse_factor();
+			left = std::make_unique<BinaryNode>(op, std::move(left), std::move(right));
+		}
+		return left;
+	}
+	std::unique_ptr<ASTNode> parse_factor() {
+		std::unordered_set<TokenType> un_ops{TokenType::Bang, TokenType::Tilde, TokenType::Minus};
+		auto next_tok = tokens[index++];
+		if (next_tok.type == TokenType::OpenParen) {
+			auto res = parse_expr();
+			ensure(TokenType::CloseParen);
 			return res;
 		}
-		//check if token type in (!,~,-)
-		std::vector<std::string> validUnary{"!","~","-"};
-		auto op = tokens[index].value;
-		if (std::find(validUnary.begin(), validUnary.end(), op) == validUnary.end())
-			fail(); ++index;
-		auto inner_exp = parse_expr();
-		return std::make_unique<UnaryNode>(op, std::move(inner_exp));
+		if (un_ops.contains(next_tok.type)) {
+			auto un_op = next_tok.value;
+			auto expr = parse_factor();
+			return std::make_unique<UnaryNode>(un_op, std::move(expr));
+		}
+		if (next_tok.type == TokenType::IntegerLiteral) {
+			return std::make_unique<LiteralNode>(std::stoi(next_tok.value));
+		}
+		fail();
 	}
 
 
