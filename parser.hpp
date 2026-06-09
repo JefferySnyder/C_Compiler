@@ -1,7 +1,8 @@
 #include <unordered_set>
+#include <functional>
 #include "lexer.hpp"
 
-enum class ASTNodeType { Function, Statement, Literal, Unary, Binary };
+enum class ASTNodeType { Function, ReturnStmt, DeclareStmt, ExprStmt, Literal, Unary, Binary, Assign, Var };
 
 struct ASTNode { 
 	ASTNodeType type;
@@ -16,9 +17,9 @@ struct LiteralNode : public ASTNode {
 };
 
 struct UnaryNode : public ASTNode {
-	std::string op;
+	TokenType op;
 	std::unique_ptr<ASTNode> right;
-	UnaryNode(std::string o, std::unique_ptr<ASTNode> r) 
+	UnaryNode(TokenType o, std::unique_ptr<ASTNode> r) 
 		: op{ o }, right{ std::move(r) } 
 	{
 		type = ASTNodeType::Unary;
@@ -26,33 +27,69 @@ struct UnaryNode : public ASTNode {
 };
 
 struct BinaryNode : public ASTNode {
-	std::string op;
+	TokenType op;
 	std::unique_ptr<ASTNode> left;
 	std::unique_ptr<ASTNode> right;
-	BinaryNode(std::string o, std::unique_ptr<ASTNode> l , std::unique_ptr<ASTNode> r) 
+	BinaryNode(TokenType o, std::unique_ptr<ASTNode> l , std::unique_ptr<ASTNode> r) 
 		: op{ o }, left{ std::move(l) } , right{ std::move(r) } 
 	{
 		type = ASTNodeType::Binary;
 	};
 };
 
-struct StatementNode : public ASTNode {
+struct AssignNode : public ASTNode {
+	std::string var_name;
 	std::unique_ptr<ASTNode> exp;
-	StatementNode(std::unique_ptr<ASTNode> e) : exp{ std::move(e) }
+	AssignNode(std::string vn, std::unique_ptr<ASTNode> e) 
+		: var_name{ vn }, exp{ std::move(e) } 
 	{
-		type = ASTNodeType::Statement;
+		type = ASTNodeType::Assign;
+	};
+};
+
+struct VarNode : public ASTNode {
+	std::string var_name;
+	VarNode(std::string vn) : var_name{vn}
+	{
+		type = ASTNodeType::Var;
+	};
+};
+
+struct ReturnStmtNode : public ASTNode {
+	std::unique_ptr<ASTNode> exp;
+	ReturnStmtNode(std::unique_ptr<ASTNode> e) : exp{ std::move(e) }
+	{
+		type = ASTNodeType::ReturnStmt;
+	};
+};
+
+struct DeclareStmtNode : public ASTNode {
+	std::string var_name;
+	std::unique_ptr<ASTNode> exp;
+	DeclareStmtNode(std::string vn, std::unique_ptr<ASTNode> e = nullptr) 
+		: var_name{ vn }, exp { std::move(e) }
+	{
+		type = ASTNodeType::DeclareStmt;
+	};
+};
+
+struct ExprStmtNode : public ASTNode {
+	std::unique_ptr<ASTNode> exp;
+	ExprStmtNode(std::unique_ptr<ASTNode> e) : exp{ std::move(e) }
+	{
+		type = ASTNodeType::ExprStmt;
 	};
 };
 
 struct FunctionNode : public ASTNode {
 	std::string name;
-	std::unique_ptr<StatementNode> body;
-	FunctionNode(std::string n, std::unique_ptr<StatementNode> b) : name{ n }, body{ std::move(b) }
+	std::vector<std::unique_ptr<ASTNode>> body;
+	FunctionNode(std::string n, std::vector<std::unique_ptr<ASTNode>> b) 
+		: name{ n }, body { std::move(b) }
 	{
 		type = ASTNodeType::Function;
 	}
 };
-
 
 class Parser {
 	std::vector<Token> tokens;
@@ -73,54 +110,98 @@ private:
 		// Parameters here
 		ensure(TokenType::CloseParen);
 		ensure(TokenType::OpenBrace);
-		auto body = parse_stmt();
+		std::vector<std::unique_ptr<ASTNode>> body;
+		while (tokens[index].type != TokenType::CloseBrace) {
+			body.emplace_back(parse_stmt());
+		}
 		auto res = std::make_unique<FunctionNode>(name, std::move(body));
 		//skip "}"
 		ensure(TokenType::CloseBrace);
 		return res;
 	}
-	std::unique_ptr<StatementNode> parse_stmt() {
-		// "return"
-		ensure(TokenType::Return);
-		auto exp = parse_expr();
-		auto res = std::make_unique<StatementNode>(std::move(exp));
-		//skip ";"
-		ensure(TokenType::Semicolon);
+	std::unique_ptr<ASTNode> parse_stmt() {
+		std::unique_ptr<ASTNode> res;
+		if (tokens[index].type == TokenType::Return) {
+			ensure(TokenType::Return);
+			auto exp = parse_expr();
+			res = std::make_unique<ReturnStmtNode>(std::move(exp));
+			ensure(TokenType::Semicolon);
+		}
+		else if (tokens[index].type == TokenType::Int) {
+			ensure(TokenType::Int);
+			auto var_name = ensure(TokenType::Identifier);
+			if (tokens[index].type == TokenType::Assignment) {
+				ensure(TokenType::Assignment);
+				auto exp = parse_expr();
+				res = std::make_unique<DeclareStmtNode>(var_name, std::move(exp));
+			}
+			else {
+				res = std::make_unique<DeclareStmtNode>(var_name);
+			}
+			ensure(TokenType::Semicolon);
+		}
+		else {
+			auto exp = parse_expr();
+			res = std::make_unique<ExprStmtNode>(std::move(exp));
+			ensure(TokenType::Semicolon);
+		}
 		return res;
 	}
-	std::unique_ptr<ASTNode> parse_expr() {
-		auto left = parse_term();
-		while (tokens[index].type == TokenType::Plus || tokens[index].type == TokenType::Minus) {
-			auto op = tokens[index++].value;
+	std::unique_ptr<ASTNode> parse_expr_handler(std::vector<TokenType> vtt, std::unique_ptr<ASTNode> left) {
+		auto it = std::find(vtt.begin(), vtt.end(), tokens[index].type);
+		while (it != vtt.end()) {
+			auto op = tokens[index++].type;
 			auto right = parse_term();
 			left = std::make_unique<BinaryNode>(op, std::move(left), std::move(right));
+			it = std::find(vtt.begin(), vtt.end(), tokens[index].type);
 		}
 		return left;
+	}
+	std::unique_ptr<ASTNode> parse_expr() {
+		auto id = parse_or_expr();
+		if (tokens[index].type == TokenType::Assignment) {
+			auto var_name = ensure(TokenType::Assignment);
+			auto right = parse_expr();
+			id = std::make_unique<AssignNode>(var_name, std::move(right));
+		}
+		return id;
+	}
+	std::unique_ptr<ASTNode> parse_or_expr() {
+		return parse_expr_handler({TokenType::OR}, parse_and_expr());
+	}
+	std::unique_ptr<ASTNode> parse_and_expr() {
+		return parse_expr_handler({TokenType::AND}, parse_equality_expr());
+	}
+	std::unique_ptr<ASTNode> parse_equality_expr() {
+		return parse_expr_handler({TokenType::NotEqual, TokenType::Equal}, parse_relational_expr());
+	}
+	std::unique_ptr<ASTNode> parse_relational_expr() {
+		return parse_expr_handler({TokenType::LessThan, TokenType::GreaterThan, TokenType::LessThanOrEqual, TokenType::GreaterThanOrEqual}, parse_add_expr());
+	}
+	std::unique_ptr<ASTNode> parse_add_expr() {
+		return parse_expr_handler({TokenType::Plus, TokenType::Minus}, parse_term());
 	}
 	std::unique_ptr<ASTNode> parse_term() {
-		auto left = parse_factor();
-		while (tokens[index].type == TokenType::Asterisk || tokens[index].type == TokenType::ForwardSlash) {
-			auto op = tokens[index++].value;
-			auto right = parse_factor();
-			left = std::make_unique<BinaryNode>(op, std::move(left), std::move(right));
-		}
-		return left;
+		return parse_expr_handler({TokenType::Asterisk, TokenType::ForwardSlash}, parse_factor());
 	}
 	std::unique_ptr<ASTNode> parse_factor() {
-		std::unordered_set<TokenType> un_ops{TokenType::Bang, TokenType::Tilde, TokenType::Minus};
 		auto next_tok = tokens[index++];
 		if (next_tok.type == TokenType::OpenParen) {
 			auto res = parse_expr();
 			ensure(TokenType::CloseParen);
 			return res;
 		}
+		std::unordered_set<TokenType> un_ops{TokenType::Bang, TokenType::Tilde, TokenType::Minus};
 		if (un_ops.contains(next_tok.type)) {
-			auto un_op = next_tok.value;
+			auto un_op = next_tok.type;
 			auto expr = parse_factor();
 			return std::make_unique<UnaryNode>(un_op, std::move(expr));
 		}
 		if (next_tok.type == TokenType::IntegerLiteral) {
 			return std::make_unique<LiteralNode>(std::stoi(next_tok.value));
+		}
+		if (next_tok.type == TokenType::Identifier) {
+			return std::make_unique<VarNode>(next_tok.value);
 		}
 		fail();
 	}
