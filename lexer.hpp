@@ -20,6 +20,15 @@ enum class TokenType {
 	Plus,
 	Asterisk,
 	ForwardSlash,
+	AND,
+	OR,
+	Equal,
+	NotEqual,
+	LessThan,
+	LessThanOrEqual,
+	GreaterThan,
+	GreaterThanOrEqual,
+	Assignment,
 };
 std::unordered_map<std::string, TokenType> keywords{
 	{"return", TokenType::Return},
@@ -46,10 +55,49 @@ std::vector<Token> tokenize(const std::string& source) {
 		if (source[i] == ';') { tokens.push_back({ TokenType::Semicolon, std::string{ch} }); ++i; continue; }
 		if (source[i] == '-') { tokens.push_back({ TokenType::Minus, std::string{ch} }); ++i; continue; }
 		if (source[i] == '~') { tokens.push_back({ TokenType::Tilde, std::string{ch} }); ++i; continue; }
-		if (source[i] == '!') { tokens.push_back({ TokenType::Bang, std::string{ch} }); ++i; continue; }
 		if (source[i] == '+') { tokens.push_back({ TokenType::Plus, std::string{ch} }); ++i; continue; }
 		if (source[i] == '*') { tokens.push_back({ TokenType::Asterisk, std::string{ch} }); ++i; continue; }
 		if (source[i] == '/') { tokens.push_back({ TokenType::ForwardSlash, std::string{ch} }); ++i; continue; }
+		if (source[i] == '!') {
+			if (source.at(i + 1) == '=') {
+				tokens.push_back({ TokenType::NotEqual, "!="});
+				i += 2; continue; 
+			}
+			tokens.push_back({ TokenType::Bang, std::string{ch} });
+			++i; continue; 
+		}
+		if (source[i] == '<') {
+			if (source.at(i + 1) == '=') {
+				tokens.push_back({ TokenType::LessThanOrEqual, "<="});
+				i += 2; continue; 
+			}
+			tokens.push_back({ TokenType::LessThan, std::string{ch} });
+			++i; continue; 
+		}
+		if (source[i] == '>') {
+			if (source.at(i + 1) == '=') {
+				tokens.push_back({ TokenType::GreaterThanOrEqual, ">="});
+				i += 2; continue; 
+			}
+			tokens.push_back({ TokenType::GreaterThan, std::string{ch} });
+			++i; continue; 
+		}
+		if (source[i] == '=') {
+			if (source.at(i + 1) == '=') {
+				tokens.push_back({ TokenType::Equal, "=="});
+				i += 2; continue; 
+			}
+			tokens.push_back({ TokenType::Assignment, std::string{ch} });
+			++i; continue; 
+		}
+		if (source[i] == '&' && source.at(i+1) == '&') {
+			tokens.push_back({ TokenType::AND, "&&"});
+			i += 2; continue; 
+		}
+		if (source[i] == '|' && source.at(i+1) == '|') {
+			tokens.push_back({ TokenType::OR, "||"});
+			i += 2; continue; 
+		}
 			
 		if (std::isdigit(ch)) {
 			std::string val;
