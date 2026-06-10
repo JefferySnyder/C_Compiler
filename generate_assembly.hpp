@@ -1,4 +1,5 @@
 #include <iostream>
+#include <format>
 #include "parser.hpp"
 
 size_t clause_idx = 0;
@@ -10,14 +11,17 @@ std::string gen_end() {
 	return "_end" + std::to_string(end_idx++);
 }
 
-void generateNodeAsm(const ASTNode* node) {
-	if (node->type == ASTNodeType::Literal) {
+void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, int>& var_map) {
+	if (node == nullptr) {
+		std::cout << "\tmov\teax, 0\n";
+	}
+	else if (node->type == ASTNodeType::Literal) {
 		auto lNode = static_cast<const LiteralNode*>(node);
 		std::cout << "\tmov\teax, " << lNode->value << "\n";
 	}
-	if (node->type == ASTNodeType::Unary) {
+	else if (node->type == ASTNodeType::Unary) {
 		auto uNode = static_cast<const UnaryNode*>(node);
-		generateNodeAsm(uNode->right.get());
+		generateNodeAsm(uNode->right.get(), var_map);
 		if (uNode->op == TokenType::Minus) {
 			std::cout << "\tneg\teax" << "\n";
 		}
@@ -30,19 +34,19 @@ void generateNodeAsm(const ASTNode* node) {
 			std::cout << "\tsete\tal\n";
 		}
 	}
-	if (node->type == ASTNodeType::Binary) {
+	else if (node->type == ASTNodeType::Binary) {
 		using enum TokenType;
 		auto bNode = static_cast<const BinaryNode*>(node);
 		if (bNode->op == OR) {
 			auto clause = gen_clause();
 			auto end = gen_end();
-			generateNodeAsm(bNode->left.get());
+			generateNodeAsm(bNode->left.get(), var_map);
 			std::cout << "\tcmp\teax, 0\n";
 			std::cout << "\tje\t" << clause << "\n";
 			std::cout << "\tmov\teax, 1\n";
 			std::cout << "\tjmp\t" << end << "\n";
 			std::cout << clause << ":\n";
-			generateNodeAsm(bNode->right.get());
+			generateNodeAsm(bNode->right.get(), var_map);
 			std::cout << "\tcmp\teax, 0\n";
 			std::cout << "\tmov\teax, 0\n";
 			std::cout << "\tsetne\tal\n";
@@ -52,21 +56,21 @@ void generateNodeAsm(const ASTNode* node) {
 		if (bNode->op == AND) {
 			auto clause = gen_clause();
 			auto end = gen_end();
-			generateNodeAsm(bNode->left.get());
+			generateNodeAsm(bNode->left.get(), var_map);
 			std::cout << "\tcmp\teax, 0\n";
 			std::cout << "\tjne\t" << clause << "\n";
 			std::cout << "\tjmp\t" << end << "\n";
 			std::cout << clause << ":\n";
-			generateNodeAsm(bNode->right.get());
+			generateNodeAsm(bNode->right.get(), var_map);
 			std::cout << "\tcmp\teax, 0\n";
 			std::cout << "\tmov\teax, 0\n";
 			std::cout << "\tsetne\tal\n";
 			std::cout << end << ":\n";
 			return;
 		}
-		generateNodeAsm(bNode->left.get());
+		generateNodeAsm(bNode->left.get(), var_map);
 		std::cout << "\tpush\trax" << "\n";
-		generateNodeAsm(bNode->right.get());
+		generateNodeAsm(bNode->right.get(), var_map);
 		std::cout << "\tpop\trcx" << "\n";
 		if (bNode->op == Plus) {
 			std::cout << "\tadd\teax, ecx\n"; return;
@@ -101,13 +105,54 @@ void generateNodeAsm(const ASTNode* node) {
 			return;
 		}
 	}
+	else if (node->type == ASTNodeType::Assign) {
+		auto aNode = static_cast<const AssignNode*>(node);
+		generateNodeAsm(aNode->exp.get(), var_map);
+		auto vNode = static_cast<const VarNode*>(aNode->var.get());
+		auto var_offset = var_map.find(vNode->var_name);
+		std::cout << std::format("\tmov\t[rbp{}], eax\n", var_offset->second);
+	}
+	else if (node->type == ASTNodeType::Var) {
+		auto vNode = static_cast<const VarNode*>(node);
+		auto var_offset = var_map.find(vNode->var_name);
+		std::cout << std::format("\tmov\teax, [rbp{}]\n", var_offset->second);
+	}
 }
 
-void generateStmtAsm(const ASTNode* stmt) {
+void generateStmtAsm(const ASTNode* stmt, std::unordered_map<std::string, int>& var_map, int& stack_index) {
 	if (stmt->type == ASTNodeType::ReturnStmt) {
 		auto rStmt = static_cast<const ReturnStmtNode*>(stmt);
-		generateNodeAsm(rStmt->exp.get());
+		generateNodeAsm(rStmt->exp.get(), var_map);
 	}
+	else if (stmt->type == ASTNodeType::DeclareStmt) {
+		auto dStmt = static_cast<const DeclareStmtNode*>(stmt);
+		if (var_map.contains(dStmt->var_name)) {
+			std::cerr << "Declared " << dStmt->var_name << " twice\n";
+		}
+		generateNodeAsm(dStmt->exp.get(), var_map);
+		std::cout << "\tpush\trax\n";
+		stack_index -= 8;
+		var_map.insert({dStmt->var_name, stack_index});
+	}
+	else if (stmt->type == ASTNodeType::ExprStmt) {
+		auto eStmt = static_cast<const ExprStmtNode*>(stmt);
+		generateNodeAsm(eStmt->exp.get(), var_map);
+	}
+}
+
+void generateFuncAssembly(const FunctionNode* func) {
+	std::unordered_map<std::string, int> var_map;
+	int stack_index = 0;
+	std::cout << "main:\n";
+	std::cout << "\tpush\trbp\n";
+	std::cout << "\tmov\trbp, rsp\n\n";
+	for (const auto& b : func->body) {
+		generateStmtAsm(b.get(), var_map, stack_index);
+	}
+	// leave
+	std::cout << "\n\tmov\trsp, rbp\n";
+	std::cout << "\tpop\trbp\n";
+	std::cout << "\tret\n";
 }
 
 void generateAssembly(const FunctionNode* func) {
@@ -116,11 +161,13 @@ void generateAssembly(const FunctionNode* func) {
 		return;
 	}
 	std::cout << "global _start" << ":\n\n";
+
+	generateFuncAssembly(func);
+
 	std::cout << "_start" << ":\n";
-	for (const auto& b : func->body) {
-		generateStmtAsm(b.get());
-	}
-	std::cout << "\tmov\tebx, eax\n";
-	std::cout << "\tmov\teax, 1\n";
-	std::cout << "\tint\t0x80\n";
+	std::cout << "\tcall\tmain\n";
+
+	std::cout << "\tmov\trdi, rax\n";
+	std::cout << "\tmov\trax, 60\n";
+	std::cout << "\tsyscall\n";
 }
