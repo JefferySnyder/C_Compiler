@@ -29,6 +29,8 @@ enum class TokenType {
 	GreaterThan,
 	GreaterThanOrEqual,
 	Assignment,
+	PlusEquals,
+	MinusEquals,
 };
 std::unordered_map<std::string, TokenType> keywords{
 	{"return", TokenType::Return},
@@ -53,9 +55,23 @@ std::vector<Token> tokenize(const std::string& source) {
 		if (source[i] == '(') { tokens.push_back({ TokenType::OpenParen, std::string{ch} }); ++i; continue; }
 		if (source[i] == ')') { tokens.push_back({ TokenType::CloseParen, std::string{ch} }); ++i; continue; }
 		if (source[i] == ';') { tokens.push_back({ TokenType::Semicolon, std::string{ch} }); ++i; continue; }
-		if (source[i] == '-') { tokens.push_back({ TokenType::Minus, std::string{ch} }); ++i; continue; }
 		if (source[i] == '~') { tokens.push_back({ TokenType::Tilde, std::string{ch} }); ++i; continue; }
-		if (source[i] == '+') { tokens.push_back({ TokenType::Plus, std::string{ch} }); ++i; continue; }
+		if (source[i] == '+') {
+			if (source.at(i + 1) == '=') {
+				tokens.push_back({ TokenType::PlusEquals, "+="});
+				i += 2; continue; 
+			}
+			tokens.push_back({ TokenType::Plus, std::string{ch} });
+			++i; continue; 
+		}
+		if (source[i] == '-') {
+			if (source.at(i + 1) == '=') {
+				tokens.push_back({ TokenType::MinusEquals, "-="});
+				i += 2; continue; 
+			}
+			tokens.push_back({ TokenType::Minus, std::string{ch} });
+			++i; continue; 
+		}
 		if (source[i] == '*') { tokens.push_back({ TokenType::Asterisk, std::string{ch} }); ++i; continue; }
 		if (source[i] == '/') { tokens.push_back({ TokenType::ForwardSlash, std::string{ch} }); ++i; continue; }
 		if (source[i] == '!') {

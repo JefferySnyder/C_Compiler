@@ -112,6 +112,18 @@ void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, int>& 
 		auto var_offset = var_map.find(vNode->var_name);
 		std::cout << std::format("\tmov\t[rbp{}], eax\n", var_offset->second);
 	}
+	else if (node->type == ASTNodeType::CompoundAssign) {
+		auto caNode = static_cast<const CompoundAssignNode*>(node);
+		generateNodeAsm(caNode->exp.get(), var_map);
+		auto vNode = static_cast<const VarNode*>(caNode->var.get());
+		auto var_offset = var_map.find(vNode->var_name);
+		if (caNode->op == TokenType::PlusEquals) {
+			std::cout << std::format("\tadd\t[rbp{}], eax\n", var_offset->second);
+		}
+		else if (caNode->op == TokenType::MinusEquals) {
+			std::cout << std::format("\tsub\t[rbp{}], eax\n", var_offset->second);
+		}
+	}
 	else if (node->type == ASTNodeType::Var) {
 		auto vNode = static_cast<const VarNode*>(node);
 		auto var_offset = var_map.find(vNode->var_name);

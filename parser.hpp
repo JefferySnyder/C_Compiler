@@ -2,7 +2,7 @@
 #include <functional>
 #include "lexer.hpp"
 
-enum class ASTNodeType { Function, ReturnStmt, DeclareStmt, ExprStmt, Literal, Unary, Binary, Assign, Var };
+enum class ASTNodeType { Function, ReturnStmt, DeclareStmt, ExprStmt, Literal, Unary, Binary, Assign, Var, CompoundAssign };
 
 struct ASTNode { 
 	ASTNodeType type;
@@ -44,6 +44,17 @@ struct AssignNode : public ASTNode {
 		: var{ std::move(v) }, exp{ std::move(e) } 
 	{
 		type = ASTNodeType::Assign;
+	};
+};
+
+struct CompoundAssignNode : public ASTNode {
+	std::unique_ptr<ASTNode> var;
+	TokenType op;
+	std::unique_ptr<ASTNode> exp;
+	CompoundAssignNode(std::unique_ptr<ASTNode> v, TokenType o, std::unique_ptr<ASTNode> e) 
+		: var{ std::move(v) }, op{ o }, exp{std::move(e)}
+	{
+		type = ASTNodeType::CompoundAssign;
 	};
 };
 
@@ -158,6 +169,16 @@ private:
 		return left;
 	}
 	std::unique_ptr<ASTNode> parse_expr() {
+		auto id = parse_assign_expr();
+		std::unordered_set<TokenType> caops{TokenType::PlusEquals, TokenType::MinusEquals};
+		if (id->type == ASTNodeType::Var && caops.contains(tokens[index].type)) {
+			auto tt = tokens[index++].type;
+			auto right = parse_expr();
+			id = std::make_unique<CompoundAssignNode>(std::move(id), tt, std::move(right));
+		}
+		return id;
+	}
+	std::unique_ptr<ASTNode> parse_assign_expr() {
 		auto id = parse_or_expr();
 		if (id->type == ASTNodeType::Var && tokens[index].type == TokenType::Assignment) {
 			ensure(TokenType::Assignment);
