@@ -38,10 +38,10 @@ struct BinaryNode : public ASTNode {
 };
 
 struct AssignNode : public ASTNode {
-	std::string var_name;
+	std::unique_ptr<ASTNode> var;
 	std::unique_ptr<ASTNode> exp;
-	AssignNode(std::string vn, std::unique_ptr<ASTNode> e) 
-		: var_name{ vn }, exp{ std::move(e) } 
+	AssignNode(std::unique_ptr<ASTNode> v, std::unique_ptr<ASTNode> e) 
+		: var{ std::move(v) }, exp{ std::move(e) } 
 	{
 		type = ASTNodeType::Assign;
 	};
@@ -151,7 +151,7 @@ private:
 		auto it = std::find(vtt.begin(), vtt.end(), tokens[index].type);
 		while (it != vtt.end()) {
 			auto op = tokens[index++].type;
-			auto right = parse_term();
+			auto right = parse_expr();
 			left = std::make_unique<BinaryNode>(op, std::move(left), std::move(right));
 			it = std::find(vtt.begin(), vtt.end(), tokens[index].type);
 		}
@@ -159,10 +159,10 @@ private:
 	}
 	std::unique_ptr<ASTNode> parse_expr() {
 		auto id = parse_or_expr();
-		if (tokens[index].type == TokenType::Assignment) {
-			auto var_name = ensure(TokenType::Assignment);
+		if (id->type == ASTNodeType::Var && tokens[index].type == TokenType::Assignment) {
+			ensure(TokenType::Assignment);
 			auto right = parse_expr();
-			id = std::make_unique<AssignNode>(var_name, std::move(right));
+			id = std::make_unique<AssignNode>(std::move(id), std::move(right));
 		}
 		return id;
 	}
@@ -215,7 +215,7 @@ private:
 	}
 	void fail() {
 		std::cerr << "failed at token: " << tokens[index].value << std::endl;
-		//std::runtime_error("Failed to parse");
+		throw std::runtime_error("Failed to parse");
 		std::cin.get();
 		std::exit(EXIT_FAILURE);
 	}
