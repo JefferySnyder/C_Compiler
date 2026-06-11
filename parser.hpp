@@ -197,14 +197,6 @@ private:
 		return res;
 	}
 	std::unique_ptr<ASTNode> parse_expr_handler(std::vector<TokenType> vtt, std::unique_ptr<ASTNode> left) {
-		auto it = std::find(vtt.begin(), vtt.end(), tokens[index].type);
-		while (it != vtt.end()) {
-			auto op = tokens[index++].type;
-			auto right = parse_expr();
-			left = std::make_unique<BinaryNode>(op, std::move(left), std::move(right));
-			it = std::find(vtt.begin(), vtt.end(), tokens[index].type);
-		}
-		return left;
 	}
 	std::unique_ptr<ASTNode> parse_expr() {
 		auto id = parse_assign_expr();
@@ -226,22 +218,62 @@ private:
 		return id;
 	}
 	std::unique_ptr<ASTNode> parse_or_expr() {
-		return parse_expr_handler({TokenType::OR}, parse_and_expr());
+		auto left = parse_and_expr();
+		while (tokens.at(index).type == TokenType::OR) {
+			auto op = tokens.at(index++).type;
+			auto right = parse_and_expr();
+			left = std::make_unique<BinaryNode>(op, std::move(left), std::move(right));
+		}
+		return left;
 	}
 	std::unique_ptr<ASTNode> parse_and_expr() {
-		return parse_expr_handler({TokenType::AND}, parse_equality_expr());
+		auto left = parse_equality_expr();
+		while (tokens.at(index).type == TokenType::AND) {
+			auto op = tokens.at(index++).type;
+			auto right = parse_equality_expr();
+			left = std::make_unique<BinaryNode>(op, std::move(left), std::move(right));
+		}
+		return left;
 	}
 	std::unique_ptr<ASTNode> parse_equality_expr() {
-		return parse_expr_handler({TokenType::NotEqual, TokenType::Equal}, parse_relational_expr());
+		auto left = parse_relational_expr();
+		while (tokens.at(index).type == TokenType::Equal || tokens.at(index).type == TokenType::NotEqual) {
+			auto op = tokens.at(index++).type;
+			auto right = parse_relational_expr();
+			left = std::make_unique<BinaryNode>(op, std::move(left), std::move(right));
+		}
+		return left;
 	}
 	std::unique_ptr<ASTNode> parse_relational_expr() {
-		return parse_expr_handler({TokenType::LessThan, TokenType::GreaterThan, TokenType::LessThanOrEqual, TokenType::GreaterThanOrEqual}, parse_add_expr());
+		auto left = parse_add_expr();
+
+		while (tokens.at(index).type == TokenType::LessThan
+			|| tokens.at(index).type == TokenType::GreaterThan
+			|| tokens.at(index).type == TokenType::LessThanOrEqual
+			|| tokens.at(index).type == TokenType::GreaterThanOrEqual) {
+			auto op = tokens.at(index++).type;
+			auto right = parse_add_expr();
+			left = std::make_unique<BinaryNode>(op, std::move(left), std::move(right));
+		}
+		return left;
 	}
 	std::unique_ptr<ASTNode> parse_add_expr() {
-		return parse_expr_handler({TokenType::Plus, TokenType::Minus}, parse_term());
+		auto left = parse_term();
+		while (tokens.at(index).type == TokenType::Plus || tokens.at(index).type == TokenType::Minus) {
+			auto op = tokens.at(index++).type;
+			auto right = parse_term();
+			left = std::make_unique<BinaryNode>(op, std::move(left), std::move(right));
+		}
+		return left;
 	}
 	std::unique_ptr<ASTNode> parse_term() {
-		return parse_expr_handler({TokenType::Asterisk, TokenType::ForwardSlash}, parse_factor());
+		auto left = parse_factor();
+		while (tokens.at(index).type == TokenType::Asterisk || tokens.at(index).type == TokenType::ForwardSlash) {
+			auto op = tokens.at(index++).type;
+			auto right = parse_factor();
+			left = std::make_unique<BinaryNode>(op, std::move(left), std::move(right));
+		}
+		return left;
 	}
 	std::unique_ptr<ASTNode> parse_factor() {
 		auto next_tok = tokens[index++];
