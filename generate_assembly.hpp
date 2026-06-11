@@ -18,6 +18,10 @@ size_t end_if_idx = 0;
 std::string gen_end_if() {
 	return "_end_if" + std::to_string(end_if_idx++);
 }
+size_t end_cond_idx = 0;
+std::string gen_end_cond() {
+	return "_end_cond" + std::to_string(end_cond_idx++);
+}
 
 void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, int>& var_map) {
 	if (node == nullptr) {
@@ -136,6 +140,19 @@ void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, int>& 
 		auto vNode = static_cast<const VarNode*>(node);
 		auto var_offset = var_map.find(vNode->var_name);
 		std::cout << std::format("\tmov\teax, [rbp{}]\n", var_offset->second);
+	}
+	else if (node->type == ASTNodeType::ConditionalExpr) {
+		auto cNode = static_cast<const ConditionalExprNode*>(node);
+		auto else_clause = gen_else();
+		auto end_cond = gen_end_cond();
+		generateNodeAsm(cNode->if_exp.get(), var_map);
+		std::cout << "\tcmp\teax, 0\n";
+		std::cout << std::format("\tje\t{}\n", else_clause);
+		generateNodeAsm(cNode->then_exp.get(), var_map);
+		std::cout << std::format("\tjmp\t{}\n", end_cond);
+		std::cout << else_clause << ":\n";
+		generateNodeAsm(cNode->else_exp.get(), var_map);
+		std::cout << end_cond << ":\n";
 	}
 }
 

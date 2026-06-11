@@ -2,7 +2,7 @@
 #include <functional>
 #include "lexer.hpp"
 
-enum class ASTNodeType { Function, ReturnStmt, Declaration, ExprStmt, ConditionalStmt, Literal, Unary, Binary, Assign, Var, CompoundAssign };
+enum class ASTNodeType { Function, ReturnStmt, Declaration, ExprStmt, ConditionalStmt, Literal, Unary, Binary, Assign, Var, CompoundAssign, ConditionalExpr };
 
 struct ASTNode { 
 	ASTNodeType type;
@@ -63,6 +63,17 @@ struct VarNode : public ASTNode {
 	VarNode(std::string vn) : var_name{vn}
 	{
 		type = ASTNodeType::Var;
+	};
+};
+
+struct ConditionalExprNode : public ASTNode {
+	std::unique_ptr<ASTNode> if_exp;
+	std::unique_ptr<ASTNode> then_exp;
+	std::unique_ptr<ASTNode> else_exp;
+	ConditionalExprNode(std::unique_ptr<ASTNode> i, std::unique_ptr<ASTNode> t, std::unique_ptr<ASTNode> e) 
+		: if_exp{ std::move(i) }, then_exp{ std::move(t) }, else_exp{ std::move(e) }
+	{
+		type = ASTNodeType::ConditionalExpr;
 	};
 };
 
@@ -196,8 +207,6 @@ private:
 		}
 		return res;
 	}
-	std::unique_ptr<ASTNode> parse_expr_handler(std::vector<TokenType> vtt, std::unique_ptr<ASTNode> left) {
-	}
 	std::unique_ptr<ASTNode> parse_expr() {
 		auto id = parse_assign_expr();
 		std::unordered_set<TokenType> caops{TokenType::PlusEquals, TokenType::MinusEquals};
@@ -209,13 +218,24 @@ private:
 		return id;
 	}
 	std::unique_ptr<ASTNode> parse_assign_expr() {
-		auto id = parse_or_expr();
+		auto id = parse_conditional_expr();
 		if (id->type == ASTNodeType::Var && tokens[index].type == TokenType::Assignment) {
 			ensure(TokenType::Assignment);
 			auto right = parse_expr();
 			id = std::make_unique<AssignNode>(std::move(id), std::move(right));
 		}
 		return id;
+	}
+	std::unique_ptr<ASTNode> parse_conditional_expr() {
+		auto if_exp = parse_or_expr();
+		if (tokens.at(index).type == TokenType::QuestionMark) {
+			ensure(TokenType::QuestionMark);
+			auto then_exp = parse_expr();
+			ensure(TokenType::Colon);
+			auto else_exp = parse_conditional_expr();
+			if_exp = std::make_unique<ConditionalExprNode>(std::move(if_exp), std::move(then_exp), std::move(else_exp));
+		}
+		return if_exp;
 	}
 	std::unique_ptr<ASTNode> parse_or_expr() {
 		auto left = parse_and_expr();
