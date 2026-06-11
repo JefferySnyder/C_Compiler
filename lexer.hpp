@@ -31,10 +31,16 @@ enum class TokenType {
 	Assignment,
 	PlusEquals,
 	MinusEquals,
+	If,
+	Else,
+	Colon,
+	QuestionMark,
 };
 std::unordered_map<std::string, TokenType> keywords{
 	{"return", TokenType::Return},
 	{"int", TokenType::Int},
+	{"if", TokenType::If},
+	{"else", TokenType::Else},
 };
 
 struct Token {
@@ -56,6 +62,8 @@ std::vector<Token> tokenize(const std::string& source) {
 		if (source[i] == ')') { tokens.push_back({ TokenType::CloseParen, std::string{ch} }); ++i; continue; }
 		if (source[i] == ';') { tokens.push_back({ TokenType::Semicolon, std::string{ch} }); ++i; continue; }
 		if (source[i] == '~') { tokens.push_back({ TokenType::Tilde, std::string{ch} }); ++i; continue; }
+		if (source[i] == ':') { tokens.push_back({ TokenType::Colon, std::string{ch} }); ++i; continue; }
+		if (source[i] == '?') { tokens.push_back({ TokenType::QuestionMark, std::string{ch} }); ++i; continue; }
 		if (source[i] == '+') {
 			if (source.at(i + 1) == '=') {
 				tokens.push_back({ TokenType::PlusEquals, "+="});

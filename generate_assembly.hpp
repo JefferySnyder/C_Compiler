@@ -10,6 +10,14 @@ size_t end_idx = 0;
 std::string gen_end() {
 	return "_end" + std::to_string(end_idx++);
 }
+size_t else_idx = 0;
+std::string gen_else() {
+	return "_else" + std::to_string(else_idx++);
+}
+size_t end_if_idx = 0;
+std::string gen_end_if() {
+	return "_end_if" + std::to_string(end_if_idx++);
+}
 
 void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, int>& var_map) {
 	if (node == nullptr) {
@@ -135,20 +143,51 @@ void generateStmtAsm(const ASTNode* stmt, std::unordered_map<std::string, int>& 
 	if (stmt->type == ASTNodeType::ReturnStmt) {
 		auto rStmt = static_cast<const ReturnStmtNode*>(stmt);
 		generateNodeAsm(rStmt->exp.get(), var_map);
-	}
-	else if (stmt->type == ASTNodeType::DeclareStmt) {
-		auto dStmt = static_cast<const DeclareStmtNode*>(stmt);
-		if (var_map.contains(dStmt->var_name)) {
-			std::cerr << "Declared " << dStmt->var_name << " twice\n";
-		}
-		generateNodeAsm(dStmt->exp.get(), var_map);
-		std::cout << "\tpush\trax\n";
-		stack_index -= 8;
-		var_map.insert({dStmt->var_name, stack_index});
+		// leave
+		std::cout << "\n\tmov\trsp, rbp\n";
+		std::cout << "\tpop\trbp\n";
+		std::cout << "\tret\n";
 	}
 	else if (stmt->type == ASTNodeType::ExprStmt) {
 		auto eStmt = static_cast<const ExprStmtNode*>(stmt);
 		generateNodeAsm(eStmt->exp.get(), var_map);
+	}
+	else if (stmt->type == ASTNodeType::ConditionalStmt) {
+		auto cStmt = static_cast<const ConditionalStmtNode*>(stmt);
+		generateNodeAsm(cStmt->exp.get(), var_map);
+		std::cout << "\tcmp\teax, 0\n";
+		if (cStmt->else_branch == nullptr) {
+			std::string end_if_name = gen_end_if();
+			std::cout << std::format("\tje\t{}\n", end_if_name);
+			generateStmtAsm(cStmt->if_branch.get(), var_map, stack_index);
+			std::cout << end_if_name << ":\n";
+		}
+		else {
+			std::string else_name = gen_else();
+			std::string end_if_name = gen_end_if();
+			std::cout << std::format("\tje\t{}\n", else_name);
+			generateStmtAsm(cStmt->if_branch.get(), var_map, stack_index);
+			std::cout << std::format("\tjmp\t{}\n", end_if_name);
+			std::cout << else_name << ":\n";
+			generateStmtAsm(cStmt->else_branch.get(), var_map, stack_index);
+			std::cout << end_if_name << ":\n";
+		}
+	}
+}
+
+void generateBlockItemAsm(const ASTNode* block_item, std::unordered_map<std::string, int>& var_map, int& stack_index) {
+	if (block_item->type == ASTNodeType::Declaration) {
+		auto decl = static_cast<const DeclarationNode*>(block_item);
+		if (var_map.contains(decl->var_name)) {
+			std::cerr << "Declared " << decl->var_name << " twice\n";
+		}
+		generateNodeAsm(decl->exp.get(), var_map);
+		std::cout << "\tpush\trax\n";
+		stack_index -= 8;
+		var_map.insert({decl->var_name, stack_index});
+	}
+	else {
+		generateStmtAsm(block_item, var_map, stack_index);
 	}
 }
 
@@ -159,12 +198,8 @@ void generateFuncAssembly(const FunctionNode* func) {
 	std::cout << "\tpush\trbp\n";
 	std::cout << "\tmov\trbp, rsp\n\n";
 	for (const auto& b : func->body) {
-		generateStmtAsm(b.get(), var_map, stack_index);
+		generateBlockItemAsm(b.get(), var_map, stack_index);
 	}
-	// leave
-	std::cout << "\n\tmov\trsp, rbp\n";
-	std::cout << "\tpop\trbp\n";
-	std::cout << "\tret\n";
 }
 
 void generateAssembly(const FunctionNode* func) {

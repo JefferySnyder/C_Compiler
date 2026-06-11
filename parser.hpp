@@ -2,7 +2,7 @@
 #include <functional>
 #include "lexer.hpp"
 
-enum class ASTNodeType { Function, ReturnStmt, DeclareStmt, ExprStmt, Literal, Unary, Binary, Assign, Var, CompoundAssign };
+enum class ASTNodeType { Function, ReturnStmt, Declaration, ExprStmt, ConditionalStmt, Literal, Unary, Binary, Assign, Var, CompoundAssign };
 
 struct ASTNode { 
 	ASTNodeType type;
@@ -74,13 +74,13 @@ struct ReturnStmtNode : public ASTNode {
 	};
 };
 
-struct DeclareStmtNode : public ASTNode {
+struct DeclarationNode : public ASTNode {
 	std::string var_name;
 	std::unique_ptr<ASTNode> exp;
-	DeclareStmtNode(std::string vn, std::unique_ptr<ASTNode> e = nullptr) 
+	DeclarationNode(std::string vn, std::unique_ptr<ASTNode> e = nullptr) 
 		: var_name{ vn }, exp { std::move(e) }
 	{
-		type = ASTNodeType::DeclareStmt;
+		type = ASTNodeType::Declaration;
 	};
 };
 
@@ -89,6 +89,17 @@ struct ExprStmtNode : public ASTNode {
 	ExprStmtNode(std::unique_ptr<ASTNode> e) : exp{ std::move(e) }
 	{
 		type = ASTNodeType::ExprStmt;
+	};
+};
+
+struct ConditionalStmtNode : public ASTNode {
+	std::unique_ptr<ASTNode> exp;
+	std::unique_ptr<ASTNode> if_branch;
+	std::unique_ptr<ASTNode> else_branch;
+	ConditionalStmtNode(std::unique_ptr<ASTNode> e, std::unique_ptr<ASTNode> ib, std::unique_ptr<ASTNode> eb = nullptr) 
+		: exp{ std::move(e) }, if_branch{ std::move(ib) }, else_branch{ std::move(eb) }
+	{
+		type = ASTNodeType::ConditionalStmt;
 	};
 };
 
@@ -122,12 +133,37 @@ private:
 		ensure(TokenType::CloseParen);
 		ensure(TokenType::OpenBrace);
 		std::vector<std::unique_ptr<ASTNode>> body;
-		while (tokens[index].type != TokenType::CloseBrace) {
-			body.emplace_back(parse_stmt());
+		while (tokens.at(index).type != TokenType::CloseBrace) {
+			body.emplace_back(parse_block_item());
 		}
 		auto res = std::make_unique<FunctionNode>(name, std::move(body));
 		//skip "}"
 		ensure(TokenType::CloseBrace);
+		return res;
+	}
+	std::unique_ptr<ASTNode> parse_block_item() {
+		std::unique_ptr<ASTNode> res;
+		if (tokens[index].type == TokenType::Int) {
+			res = parse_declaration();
+		}
+		else {
+			res = parse_stmt();
+		}
+		return res;
+	}
+	std::unique_ptr<ASTNode> parse_declaration() {
+		std::unique_ptr<ASTNode> res;
+		ensure(TokenType::Int);
+		auto var_name = ensure(TokenType::Identifier);
+		if (tokens[index].type == TokenType::Assignment) {
+			ensure(TokenType::Assignment);
+			auto exp = parse_expr();
+			res = std::make_unique<DeclarationNode>(var_name, std::move(exp));
+		}
+		else {
+			res = std::make_unique<DeclarationNode>(var_name);
+		}
+		ensure(TokenType::Semicolon);
 		return res;
 	}
 	std::unique_ptr<ASTNode> parse_stmt() {
@@ -138,18 +174,20 @@ private:
 			res = std::make_unique<ReturnStmtNode>(std::move(exp));
 			ensure(TokenType::Semicolon);
 		}
-		else if (tokens[index].type == TokenType::Int) {
-			ensure(TokenType::Int);
-			auto var_name = ensure(TokenType::Identifier);
-			if (tokens[index].type == TokenType::Assignment) {
-				ensure(TokenType::Assignment);
-				auto exp = parse_expr();
-				res = std::make_unique<DeclareStmtNode>(var_name, std::move(exp));
+		else if (tokens[index].type == TokenType::If) {
+			ensure(TokenType::If);
+			ensure(TokenType::OpenParen);
+			auto exp = parse_expr();
+			ensure(TokenType::CloseParen);
+			auto if_branch = parse_stmt();
+			if (tokens[index].type == TokenType::Else) {
+				ensure(TokenType::Else);
+				auto else_branch = parse_stmt();
+				res = std::make_unique<ConditionalStmtNode>(std::move(exp), std::move(if_branch), std::move(else_branch));
 			}
 			else {
-				res = std::make_unique<DeclareStmtNode>(var_name);
+				res = std::make_unique<ConditionalStmtNode>(std::move(exp), std::move(if_branch));
 			}
-			ensure(TokenType::Semicolon);
 		}
 		else {
 			auto exp = parse_expr();
@@ -229,15 +267,15 @@ private:
 
 
 	std::string ensure(TokenType comp) {
-		if (tokens[index].type != comp) {
+		if (tokens.at(index).type != comp) {
 			fail();
 		}
 		return tokens[index++].value;
 	}
 	void fail() {
-		std::cerr << "failed at token: " << tokens[index].value << std::endl;
+		std::cerr << "failed at token: " << tokens.at(index).value<< std::endl;
 		throw std::runtime_error("Failed to parse");
-		std::cin.get();
-		std::exit(EXIT_FAILURE);
+		//std::cin.get();
+		//std::exit(EXIT_FAILURE);
 	}
 };
