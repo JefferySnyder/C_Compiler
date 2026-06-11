@@ -14,13 +14,13 @@ void run_compiler(std::string input) {
 	Parser parser{ tokens };
 	auto ast = parser.parse();
 
-	//generateAssembly(ast.get());
+	generateAssembly(ast.get());
 }
 
 int main(int argc, char* argv[]) {
 	size_t fail_count = 0, file_count = 0;
 
-	bool test_local = false;
+	bool test_local = true;
 	if (test_local) {
 		try {
 			run_compiler("inputs/input.c");
@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
 	}
 
     int stage_nums = 6;
-    std::string is_valid = "invalid";
+    std::string is_valid = "valid";
 
 	std::string full_current_path;
 
@@ -79,13 +79,16 @@ int main(int argc, char* argv[]) {
     } catch (const fs::filesystem_error& e) {
         std::cerr << "Error: " << e.what() << "\n";
     }
-	std::cout << "Files: " << file_count << " , Fails: " << fail_count << std::endl;
-	std::cout << "Files that weren't counted as invalid:" << std::endl;
-	for (const auto& file : leftover_list) {
-		std::cout << file << std::endl;
+	if (is_valid == "invalid") {
+		std::cout << "Files: " << file_count << " , Fails: " << fail_count << std::endl;
+		std::cout << "Files that weren't counted as invalid:" << std::endl;
+		for (const auto& file : leftover_list) {
+			std::cout << file << std::endl;
+		}
 	}
-
-    std::cout << "if there is nothing, you're good";
+	else {
+		std::cout << "if there is nothing, you're good";
+	}
 
 	std::cin.get();
 	return 0;
