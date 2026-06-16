@@ -1,6 +1,6 @@
 CXX = g++
 CXXFLAGS = -Wall -Wextra -std=c++20
-TARGET = myprogram
+TARGET = mycc
 SRCS = main.cpp
 # Automatically generate object file names (.o) from source file names
 OBJS = $(SRCS:.cpp=.o)
