@@ -18,6 +18,20 @@ void run_compiler(std::string input) {
 }
 
 int main(int argc, char* argv[]) {
+	if (argc == 2) {
+		try {
+			run_compiler(argv[1]);
+		}
+		catch (const std::runtime_error& r) {
+			std::cerr << "Error: " << r.what() << " at inputs.c\n";
+		}
+		catch (const std::out_of_range& o) {
+			std::cerr << "Error: vector out of range at inputs.c\n";
+		}
+
+		return 0;
+	}
+
 	size_t fail_count = 0, file_count = 0;
 
 	bool test_local = true;
