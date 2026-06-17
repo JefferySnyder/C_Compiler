@@ -2,7 +2,7 @@
 #include <functional>
 #include "lexer.hpp"
 
-enum class ASTNodeType { Function, ReturnStmt, Declaration, ExprStmt, ConditionalStmt, Literal, Unary, Binary, Assign, Var, CompoundAssign, ConditionalExpr };
+enum class ASTNodeType { Function, ReturnStmt, Declaration, ExprStmt, ConditionalStmt, CompoundStmt, Literal, Unary, Binary, Assign, Var, CompoundAssign, ConditionalExpr };
 
 struct ASTNode { 
 	ASTNodeType type;
@@ -114,10 +114,19 @@ struct ConditionalStmtNode : public ASTNode {
 	};
 };
 
+struct CompoundStmtNode : public ASTNode {
+	std::vector<std::unique_ptr<ASTNode>> block;
+	CompoundStmtNode(std::vector<std::unique_ptr<ASTNode>> b) 
+		:block{ std::move(b) }
+	{
+		type = ASTNodeType::CompoundStmt;
+	};
+};
+
 struct FunctionNode : public ASTNode {
 	std::string name;
-	std::vector<std::unique_ptr<ASTNode>> body;
-	FunctionNode(std::string n, std::vector<std::unique_ptr<ASTNode>> b) 
+	std::unique_ptr<ASTNode> body;
+	FunctionNode(std::string n, std::unique_ptr<ASTNode> b) 
 		: name{ n }, body { std::move(b) }
 	{
 		type = ASTNodeType::Function;
@@ -134,20 +143,20 @@ public:
 	}
 private:
 	std::unique_ptr<FunctionNode> parse_func() {
-		//skip "int"
 		ensure(TokenType::Int);
-		// "main"
-		auto name = ensure(TokenType::Identifier);
-		//skip "() {"
+		auto name = ensure(TokenType::Identifier); // "main"
 		ensure(TokenType::OpenParen);
 		// Parameters here
 		ensure(TokenType::CloseParen);
+		return std::make_unique<FunctionNode>(name, parse_block());
+	}
+	std::unique_ptr<ASTNode> parse_block() {
 		ensure(TokenType::OpenBrace);
-		std::vector<std::unique_ptr<ASTNode>> body;
+		std::vector<std::unique_ptr<ASTNode>> block;
 		while (tokens.at(index).type != TokenType::CloseBrace) {
-			body.emplace_back(parse_block_item());
+			block.emplace_back(parse_block_item());
 		}
-		auto res = std::make_unique<FunctionNode>(name, std::move(body));
+		auto res = std::make_unique<CompoundStmtNode>(std::move(block));
 		//skip "}"
 		ensure(TokenType::CloseBrace);
 		return res;
@@ -199,6 +208,9 @@ private:
 			else {
 				res = std::make_unique<ConditionalStmtNode>(std::move(exp), std::move(if_branch));
 			}
+		}
+		else if (tokens[index].type == TokenType::OpenBrace) {
+			res = parse_block();
 		}
 		else {
 			auto exp = parse_expr();
@@ -315,6 +327,7 @@ private:
 			return std::make_unique<VarNode>(next_tok.value);
 		}
 		fail();
+		return nullptr;
 	}
 
 
@@ -322,7 +335,7 @@ private:
 		if (tokens.at(index).type != comp) {
 			fail();
 		}
-		return tokens[index++].value;
+		return tokens.at(index++).value;
 	}
 	void fail() {
 		std::cerr << "failed at token: " << tokens.at(index).value<< std::endl;
