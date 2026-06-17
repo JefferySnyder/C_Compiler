@@ -14,6 +14,8 @@ A lightweight C compiler that translates a subset of C into Intel x86-64 Assembl
 
 ## Prerequisites (Currently built for Windows)
 
+- Visual Studio
+- *OR*
 - GCC (to compile the compiler)
 - make (build automation)
 
