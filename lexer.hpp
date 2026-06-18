@@ -35,12 +35,22 @@ enum class TokenType {
 	Else,
 	Colon,
 	QuestionMark,
+	For,
+	While,
+	Do,
+	Break,
+	Continue,
 };
 std::unordered_map<std::string, TokenType> keywords{
 	{"return", TokenType::Return},
 	{"int", TokenType::Int},
 	{"if", TokenType::If},
 	{"else", TokenType::Else},
+	{"for", TokenType::For},
+	{"while", TokenType::While},
+	{"do", TokenType::Do},
+	{"break", TokenType::Break},
+	{"continue", TokenType::Continue},
 };
 
 struct Token {
