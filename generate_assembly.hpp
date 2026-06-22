@@ -89,9 +89,8 @@ void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, int>& 
 			return;
 		}
 		generateNodeAsm(bNode->left.get(), var_map);
-		std::cout << "\tpush\trax" << "\n";
+		std::cout << "\tmov\tecx, eax\n";
 		generateNodeAsm(bNode->right.get(), var_map);
-		std::cout << "\tpop\trcx" << "\n";
 		if (bNode->op == Plus) {
 			std::cout << "\tadd\teax, ecx\n"; return;
 		}
@@ -179,7 +178,6 @@ void generateStmtAsm(const ASTNode* stmt, std::unordered_map<std::string, int>& 
 		auto rStmt = static_cast<const ReturnStmtNode*>(stmt);
 		generateNodeAsm(rStmt->exp.get(), var_map);
 		// leave
-		std::cout << "\n\tmov\trsp, rbp\n";
 		std::cout << "\tpop\trbp\n";
 		std::cout << "\tret\n";
 	}
@@ -245,8 +243,8 @@ void generateBlockItemAsm(const ASTNode* block_item, std::unordered_map<std::str
 			throw std::runtime_error("Failed to generate");
 		}
 		generateNodeAsm(decl->exp.get(), var_map);
-		std::cout << "\tpush\trax\n";
 		stack_index -= 8;
+		std::cout << std::format("\tmov\t[rbp{}], eax\n", stack_index);
 		var_map.insert({decl->var_name, stack_index});
 	}
 	else {
@@ -259,15 +257,11 @@ void generateBlockAsm(const ASTNode* node, std::unordered_map<std::string, int>&
 		return;
 	}
 	auto var_map_copy = var_map;
-	auto stack_index_copy = stack_index;
 	auto cpStmt = static_cast<const CompoundStmtNode*>(node);
 	for (const auto& b : cpStmt->block) {
 		generateBlockItemAsm(b.get(), var_map, stack_index);
 	}
-	auto bytes_to_dealloc = stack_index_copy - stack_index;
-	std::cout << std::format("\tadd\trsp, {}\n", bytes_to_dealloc);
 	var_map = var_map_copy;
-	stack_index = stack_index_copy;
 }
 
 void generateFuncAssembly(const FunctionNode* func) {
