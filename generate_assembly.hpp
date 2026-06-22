@@ -22,6 +22,14 @@ size_t end_cond_idx = 0;
 std::string gen_end_cond() {
 	return "_end_cond" + std::to_string(end_cond_idx++);
 }
+size_t while_idx = 0;
+std::string gen_while() {
+	return "_while" + std::to_string(while_idx++);
+}
+size_t end_while_idx = 0;
+std::string gen_end_while() {
+	return "_end_while" + std::to_string(end_while_idx++);
+}
 
 void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, int>& var_map) {
 	if (node == nullptr) {
@@ -202,6 +210,30 @@ void generateStmtAsm(const ASTNode* stmt, std::unordered_map<std::string, int>& 
 	}
 	else if (stmt->type == ASTNodeType::CompoundStmt) {
 		generateBlockAsm(stmt, var_map, stack_index);
+	}
+	else if (stmt->type == ASTNodeType::WhileStmt) {
+		auto wStmt = static_cast<const WhileStmtNode*>(stmt);
+		auto while_name = gen_while();
+		std::cout << while_name << ":\n";
+		generateNodeAsm(wStmt->init.get(), var_map);
+		std::cout << "\tcmp\teax, 0\n";
+		auto end_while_name = gen_end_while();
+		std::cout << std::format("\tje\t{}\n", end_while_name);
+		generateStmtAsm(wStmt->body.get(), var_map, stack_index);
+		std::cout << std::format("\tjmp\t{}\n", while_name);
+		std::cout << end_while_name << ":\n";
+	}
+	else if (stmt->type == ASTNodeType::DoStmt) {
+		auto dStmt = static_cast<const DoStmtNode*>(stmt);
+		auto while_name = gen_while();
+		std::cout << while_name << ":\n";
+		generateStmtAsm(dStmt->body.get(), var_map, stack_index);
+		generateNodeAsm(dStmt->init.get(), var_map);
+		std::cout << "\tcmp\teax, 0\n";
+		std::cout << std::format("\tjne\t{}\n", while_name);
+	}
+	else if (stmt->type == ASTNodeType::ForStmt) {
+		auto fStmt = static_cast<const ForStmtNode*>(stmt);
 	}
 }
 
