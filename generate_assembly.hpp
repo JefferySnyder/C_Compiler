@@ -30,6 +30,14 @@ size_t end_while_idx = 0;
 std::string gen_end_while() {
 	return "_end_while" + std::to_string(end_while_idx++);
 }
+size_t for_idx = 0;
+std::string gen_for() {
+	return "_for" + std::to_string(for_idx++);
+}
+size_t end_for_idx = 0;
+std::string gen_end_for() {
+	return "_end_for" + std::to_string(end_for_idx++);
+}
 
 void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, int>& var_map) {
 	if (node == nullptr) {
@@ -172,6 +180,7 @@ void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, int>& 
 }
 
 void generateBlockAsm(const ASTNode*, std::unordered_map<std::string, int>&, int&);
+void generateBlockItemAsm(const ASTNode*, std::unordered_map<std::string, int>&, int&);
 
 void generateStmtAsm(const ASTNode* stmt, std::unordered_map<std::string, int>& var_map, int& stack_index) {
 	if (stmt->type == ASTNodeType::ReturnStmt) {
@@ -232,6 +241,24 @@ void generateStmtAsm(const ASTNode* stmt, std::unordered_map<std::string, int>& 
 	}
 	else if (stmt->type == ASTNodeType::ForStmt) {
 		auto fStmt = static_cast<const ForStmtNode*>(stmt);
+		auto var_map_copy = var_map;
+		auto for_init = fStmt->init.get();
+		if (for_init != nullptr && for_init->type == ASTNodeType::Declaration) {
+			generateBlockItemAsm(for_init, var_map, stack_index);
+		} else {
+			generateNodeAsm(for_init, var_map);
+		}
+		auto for_name = gen_for();
+		std::cout << for_name << ":\n";
+		generateNodeAsm(fStmt->cond.get(), var_map);
+		std::cout << "\tcmp\teax, 0\n";
+		auto end_for_name = gen_end_for();
+		std::cout << std::format("\tje\t{}\n", end_for_name);
+		generateStmtAsm(fStmt->body.get(), var_map, stack_index);
+		generateNodeAsm(fStmt->post.get(), var_map);
+		std::cout << std::format("\tjmp\t{}\n", for_name);
+		std::cout << end_for_name << ":\n";
+		var_map = var_map_copy;
 	}
 }
 
