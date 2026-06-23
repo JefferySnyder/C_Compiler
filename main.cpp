@@ -6,7 +6,7 @@
 
 namespace fs = std::filesystem;
 
-void run_compiler(std::string input) {
+void run_compiler(std::string input, bool test_parse = false) {
 	std::fstream file(input);
 	std::string file_contents((std::istreambuf_iterator<char>(file)),
 							   std::istreambuf_iterator<char>());
@@ -14,50 +14,39 @@ void run_compiler(std::string input) {
 	Parser parser{ tokens };
 	auto ast = parser.parse();
 
-	generateAssembly(ast.get());
+	if (!test_parse) {
+		generateAssembly(ast.get());
+	}
 }
 
 int main(int argc, char* argv[]) {
-	if (argc == 2) {
-		try {
-			run_compiler(argv[1]);
-		}
-		catch (const std::runtime_error& r) {
-			std::cerr << "Error: " << r.what() << " at inputs.c\n";
-		}
-		catch (const std::out_of_range& o) {
-			std::cerr << "Error: vector out of range at inputs.c\n";
-		}
-
-		return 0;
-	}
-
-	size_t fail_count = 0, file_count = 0;
-
 	bool test_local = true;
-	if (test_local) {
+
+	if (argc == 2 || test_local) {
+		auto input = argc == 2 ? argv[1] : "inputs/input.c";
 		try {
-			run_compiler("inputs/input.c");
+			run_compiler(input);
 		}
 		catch (const std::runtime_error& r) {
-			std::cerr << "Error: " << r.what() << " at inputs.c\n";
-			fail_count++;
+			std::cerr << "Error: " << r.what() << " - inputs.c\n";
 		}
-		catch (const std::out_of_range& o) {
-			std::cerr << "Error: vector out of range at inputs.c\n";
-			fail_count++;
+		catch (const std::out_of_range&) {
+			std::cerr << "Error: vector out of range - inputs.c\n";
 		}
 
 		std::cin.get();
 		return 0;
 	}
 
-    int stage_nums = 6;
+	// test parsing with writing_a_c_compiler repo
+    int stage_nums = 8;
     std::string is_valid = "valid";
 
 	std::string full_current_path;
 
 	std::vector<std::string> leftover_list;
+
+	size_t fail_count = 0, file_count = 0;
 
     try {
         for (int i = 1; i <= stage_nums; i++) {
@@ -73,14 +62,14 @@ int main(int argc, char* argv[]) {
 						full_current_path = dir_path.string() + c_file;
 						try {
 							leftover_list.push_back(full_current_path);
-							run_compiler(full_current_path);
+							run_compiler(full_current_path, !test_local);
 						}
 						catch (const std::runtime_error& r) {
 							std::cerr << "Error: " << r.what() << " at " << full_current_path << "\n";
 							leftover_list.pop_back();
 							fail_count++;
 						}
-						catch (const std::out_of_range& o) {
+						catch (const std::out_of_range&) {
 							std::cerr << "Error: vector out of range at " << full_current_path << "\n";
 							leftover_list.pop_back();
 							fail_count++;
