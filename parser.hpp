@@ -293,10 +293,12 @@ private:
 		}
 		else if (tokens[index].type == TokenType::Break) {
 			ensure(TokenType::Break);
+			res = std::make_unique<BreakStmtNode>();
 			ensure(TokenType::Semicolon);
 		}
 		else if (tokens[index].type == TokenType::Continue) {
 			ensure(TokenType::Continue);
+			res = std::make_unique<ContinueStmtNode>();
 			ensure(TokenType::Semicolon);
 		}
 		else {
