@@ -25,6 +25,12 @@ Clone the repository and build the executable using Visual Studio.
 ***OR***
 Clone the repository and build the executable using `make`:
 
+```bash
+git clone https://github.com/JefferySnyder/C_Compiler.git
+cd ./C_Compiler/
+make
+```
+
 ## Usage
 
 Run the compiler on a C source file to generate assembly output:
@@ -42,13 +48,13 @@ Currently, the compiler supports a subset of the C99 standard, including:
 - Basic types: `int`
 - Control flow: `if`, `else`, including ternary expressions (e1 `?` e2 `:` e3)
 - Arithmetic and relational operators `+`, `-`, `*`, `/`, `==`, `<`, `>`, etc.
+- Control flow: `while` and `for` loops.
 
 ### Work-In-Progress
 
 Features that are currently being, or will soon be, worked on:
 
 - Basic types: `bool`, `char`, and pointers.
-- Control flow: `while` and `for` loops.
 - Function definitions and calls (including parameter passing).
 
 ## Known Limitations
