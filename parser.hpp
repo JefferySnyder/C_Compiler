@@ -2,7 +2,7 @@
 #include <functional>
 #include "lexer.hpp"
 
-enum class ASTNodeType { Function, ReturnStmt, Declaration, ExprStmt, ConditionalStmt, CompoundStmt, ForStmt, WhileStmt, DoStmt, BreakStmt, ContinueStmt, Literal, Unary, Binary, Assign, Var, CompoundAssign, ConditionalExpr };
+enum class ASTNodeType { Program, Function, ReturnStmt, Declaration, ExprStmt, ConditionalStmt, CompoundStmt, ForStmt, WhileStmt, DoStmt, BreakStmt, ContinueStmt, Literal, Unary, Binary, Assign, Var, CompoundAssign, ConditionalExpr, FunCall };
 
 struct ASTNode { 
 	ASTNodeType type;
@@ -75,6 +75,16 @@ struct ConditionalExprNode : public ASTNode {
 	{
 		type = ASTNodeType::ConditionalExpr;
 	};
+};
+
+struct FunCallNode : public ASTNode {
+	std::string name;
+	std::vector<std::unique_ptr<ASTNode>> args;
+	FunCallNode(std::string n, std::vector<std::unique_ptr<ASTNode>> a)
+		:name{ n }, args{ std::move(a) }
+	{
+		type = ASTNodeType::FunCall;
+	}
 };
 
 struct ReturnStmtNode : public ASTNode {
@@ -165,11 +175,21 @@ struct ContinueStmtNode : public ASTNode {
 
 struct FunctionNode : public ASTNode {
 	std::string name;
-	std::unique_ptr<ASTNode> body;
-	FunctionNode(std::string n, std::unique_ptr<ASTNode> b) 
-		: name{ n }, body { std::move(b) }
+	std::vector<std::string> params;
+	std::unique_ptr<ASTNode> body; // CompoundStmt
+	FunctionNode(std::string n, std::vector<std::string> p, std::unique_ptr<ASTNode> b) 
+		: name{ n }, params{ std::move(p) }, body{std::move(b)}
 	{
 		type = ASTNodeType::Function;
+	}
+};
+
+struct ProgramNode : public ASTNode {
+	std::vector<std::unique_ptr<FunctionNode>> funcs;
+	ProgramNode(std::vector<std::unique_ptr<FunctionNode>> f) 
+		: funcs{ std::move(f) }
+	{
+		type = ASTNodeType::Program;
 	}
 };
 
@@ -178,17 +198,37 @@ class Parser {
 	size_t index = 0;
 public:
 	explicit Parser(std::vector<Token> t) : tokens{ t } {};
-	std::unique_ptr<FunctionNode> parse() {
-		return parse_func();
+	std::unique_ptr<ProgramNode> parse() {
+		return parse_program();
 	}
 private:
+	std::unique_ptr<ProgramNode> parse_program() {
+		std::vector<std::unique_ptr<FunctionNode>> funcs;
+		while (index < tokens.size()) {
+			funcs.emplace_back(parse_func());
+		}
+		return std::make_unique<ProgramNode>(std::move(funcs));
+	}
 	std::unique_ptr<FunctionNode> parse_func() {
 		ensure(TokenType::Int);
-		auto name = ensure(TokenType::Identifier); // "main"
+		auto name = ensure(TokenType::Identifier);
 		ensure(TokenType::OpenParen);
-		// Parameters here
+		std::vector<std::string> params;
+		if (tokens[index].type != TokenType::CloseParen) {
+			ensure(TokenType::Int);
+			params.emplace_back(ensure(TokenType::Identifier));
+			while (tokens[index].type != TokenType::CloseParen) {
+				ensure(TokenType::Comma);
+				ensure(TokenType::Int);
+				params.emplace_back(ensure(TokenType::Identifier));
+			}
+		}
 		ensure(TokenType::CloseParen);
-		return std::make_unique<FunctionNode>(name, parse_block());
+		if (tokens[index].type == TokenType::Semicolon) {
+			ensure(TokenType::Semicolon);
+			return std::make_unique<FunctionNode>(name, params, nullptr);
+		}
+		return std::make_unique<FunctionNode>(name, params, parse_block());
 	}
 	std::unique_ptr<ASTNode> parse_block() {
 		ensure(TokenType::OpenBrace);
@@ -420,8 +460,21 @@ private:
 			return std::make_unique<LiteralNode>(std::stoi(value));
 		}
 		if (peek_tok_type == TokenType::Identifier) {
-			auto value = ensure(TokenType::Identifier);
-			return std::make_unique<VarNode>(value);
+			auto name = ensure(TokenType::Identifier);
+			if (tokens[index].type == TokenType::OpenParen) {
+				ensure(TokenType::OpenParen);
+				std::vector<std::unique_ptr<ASTNode>> args;
+				if (tokens[index].type != TokenType::CloseParen) {
+					args.emplace_back(parse_expr());
+					while (tokens[index].type != TokenType::CloseParen) {
+						ensure(TokenType::Comma);
+						args.emplace_back(parse_expr());
+					}
+				}
+				ensure(TokenType::CloseParen);
+				return std::make_unique<FunCallNode>(name, std::move(args));
+			}
+			return std::make_unique<VarNode>(name);
 		}
 		fail();
 		return nullptr;
