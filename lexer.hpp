@@ -143,7 +143,7 @@ std::vector<Token> tokenize(const std::string& source) {
 		}
 		if (std::isalpha(ch)) {
 			std::string val;
-			while (i < source.size() && std::isalnum(source[i])) { val += source[i++]; }
+			while (i < source.size() && (std::isalnum(source[i]) || source[i] == '_')) { val += source[i++]; }
 			if (keywords.contains(val)) {
 				tokens.push_back({ keywords[val], val });
 			}
