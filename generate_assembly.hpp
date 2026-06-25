@@ -1,5 +1,6 @@
 #include <iostream>
 #include <format>
+#include <ranges>
 #include "parser.hpp"
 #include "context.hpp"
 
@@ -98,8 +99,9 @@ void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, int>& 
 			return;
 		}
 		generateNodeAsm(bNode->left.get(), var_map);
-		std::cout << "\tmov\tecx, eax\n";
+		std::cout << "\tpush\trax\n";
 		generateNodeAsm(bNode->right.get(), var_map);
+		std::cout << "\tpop\trcx\n";
 		if (bNode->op == Plus) {
 			std::cout << "\tadd\teax, ecx\n"; return;
 		}
@@ -137,12 +139,12 @@ void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, int>& 
 		auto aNode = static_cast<const AssignNode*>(node);
 		generateNodeAsm(aNode->exp.get(), var_map);
 		auto vNode = static_cast<const VarNode*>(aNode->var.get());
-		auto key = vNode->var_name;
+		auto& key = vNode->var_name;
 		if (!var_map.contains(key)) {
 			std::cerr << "Variable '" << key << "' doesn't exist (in this scope)\n";
 			throw std::runtime_error("Failed to generate");
 		}
-		std::cout << std::format("\tmov\t[rbp{}], eax\n", var_map.at(key));
+		std::cout << std::format("\tmov\t[rbp{:+}], eax\n", var_map.at(key));
 	}
 	else if (node->type == ASTNodeType::CompoundAssign) {
 		auto caNode = static_cast<const CompoundAssignNode*>(node);
@@ -162,12 +164,12 @@ void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, int>& 
 	}
 	else if (node->type == ASTNodeType::Var) {
 		auto vNode = static_cast<const VarNode*>(node);
-		auto key = vNode->var_name;
+		auto& key = vNode->var_name;
 		if (!var_map.contains(key)) {
 			std::cerr << "Variable '" << key << "' doesn't exist (in this scope)\n";
 			throw std::runtime_error("Failed to generate");
 		}
-		std::cout << std::format("\tmov\teax, [rbp{}]\n", var_map.at(key));
+		std::cout << std::format("\tmov\teax, [rbp{:+}]\n", var_map.at(key));
 	}
 	else if (node->type == ASTNodeType::ConditionalExpr) {
 		auto cNode = static_cast<const ConditionalExprNode*>(node);
@@ -182,6 +184,20 @@ void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, int>& 
 		generateNodeAsm(cNode->else_exp.get(), var_map);
 		std::cout << end_cond << ":\n";
 	}
+	else if (node->type == ASTNodeType::FunCall) {
+		auto fcNode = static_cast<const FunCallNode*>(node);
+		// 16 byte align first (saves 8 bit return address)
+		auto offset = ((fcNode->args.size() + 1) * 8) % 16;
+		std::cout << std::format("\tsub\trsp, {}\n", offset);
+		// push args to stack in reverse order
+		for (const auto& a : std::views::reverse(fcNode->args)) {
+			generateNodeAsm(a.get(), var_map);
+			std::cout << "\tpush\trax\n";
+		}
+		std::cout << std::format("\tcall\t{}\n", fcNode->name);
+		// deallocate args
+		std::cout << std::format("\tadd\trsp, {}\n", fcNode->args.size() * 8 + offset);
+	}
 }
 
 void generateBlockAsm(const ASTNode*, Context&);
@@ -192,6 +208,8 @@ void generateStmtAsm(const ASTNode* stmt, Context& context) {
 		auto rStmt = static_cast<const ReturnStmtNode*>(stmt);
 		generateNodeAsm(rStmt->exp.get(), context.var_map);
 		// leave
+		std::cout << "\n";
+		std::cout << "\tmov\trsp, rbp\n";
 		std::cout << "\tpop\trbp\n";
 		std::cout << "\tret\n";
 	}
@@ -252,7 +270,7 @@ void generateStmtAsm(const ASTNode* stmt, Context& context) {
 	}
 	else if (stmt->type == ASTNodeType::ForStmt) {
 		auto fStmt = static_cast<const ForStmtNode*>(stmt);
-		auto var_map_copy = context.var_map;
+		auto& var_map_copy = context.var_map;
 		auto for_init = fStmt->init.get();
 		if (for_init != nullptr && for_init->type == ASTNodeType::Declaration) {
 			generateBlockItemAsm(for_init, context);
@@ -302,7 +320,7 @@ void generateBlockAsm(const ASTNode* node, Context& context) {
 	if (node->type != ASTNodeType::CompoundStmt) {
 		return;
 	}
-	auto var_map_copy = context.var_map;
+	auto& var_map_copy = context.var_map;
 	auto cpStmt = static_cast<const CompoundStmtNode*>(node);
 	for (const auto& b : cpStmt->block) {
 		generateBlockItemAsm(b.get(), context);
@@ -311,21 +329,24 @@ void generateBlockAsm(const ASTNode* node, Context& context) {
 }
 
 void generateFuncAssembly(const FunctionNode* func) {
-	std::cout << "main:\n";
+	std::cout << func->name << ":\n";
 	std::cout << "\tpush\trbp\n";
 	std::cout << "\tmov\trbp, rsp\n\n";
 	Context context;
+	int param_offset = 8;
+	for (const auto& param : func->params) {
+		param_offset += 8;
+		context.var_map.insert({ param, param_offset });
+	}
 	generateBlockAsm(func->body.get(), context);
 }
 
-void generateAssembly(const FunctionNode* func) {
-	if (func->name != "main") {
-		std::cerr << "function name needs to be main";
-		return;
-	}
+void generateAssembly(const ProgramNode* program) {
 	std::cout << "global _start" << ":\n\n";
 
-	generateFuncAssembly(func);
+	for (const auto& f : program->funcs) {
+		generateFuncAssembly(f.get());
+	}
 
 	std::cout << "_start" << ":\n";
 	std::cout << "\tcall\tmain\n";
