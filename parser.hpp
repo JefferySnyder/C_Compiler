@@ -2,10 +2,10 @@
 #include <functional>
 #include "lexer.hpp"
 
-enum class ASTNodeType { Program, Function, ReturnStmt, Declaration, ExprStmt, ConditionalStmt, CompoundStmt, ForStmt, WhileStmt, DoStmt, BreakStmt, ContinueStmt, Literal, Unary, Binary, Assign, Var, CompoundAssign, ConditionalExpr, FunCall };
+enum class ASTNodeType { UnInit, Program, Function, ReturnStmt, Declaration, ExprStmt, ConditionalStmt, CompoundStmt, ForStmt, WhileStmt, DoStmt, BreakStmt, ContinueStmt, Literal, Unary, Binary, Assign, Var, CompoundAssign, ConditionalExpr, FunCall };
 
 struct ASTNode { 
-	ASTNodeType type;
+	ASTNodeType type = ASTNodeType::UnInit;
 	virtual ~ASTNode() = default; 
 };
 
