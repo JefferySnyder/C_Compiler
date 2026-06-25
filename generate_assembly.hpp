@@ -338,7 +338,10 @@ void generateFuncAssembly(const FunctionNode* func) {
 		param_offset += 8;
 		context.var_map.insert({ param, param_offset });
 	}
-	generateBlockAsm(func->body.get(), context);
+	auto func_body = func->body.get();
+	if (func_body != nullptr) {
+		generateBlockAsm(func_body, context);
+	}
 }
 
 void generateAssembly(const ProgramNode* program) {
