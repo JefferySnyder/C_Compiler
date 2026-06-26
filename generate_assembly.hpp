@@ -41,7 +41,7 @@ std::string gen_end_for() {
 	return "_end_for" + std::to_string(end_for_idx++);
 }
 
-void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, int>& var_map) {
+void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, Info>& var_map) {
 	if (node == nullptr) {
 		std::cout << "\tmov\teax, 0\n";
 	}
@@ -144,7 +144,12 @@ void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, int>& 
 			std::cerr << "Variable '" << key << "' doesn't exist (in this scope)\n";
 			throw std::runtime_error("Failed to generate");
 		}
-		std::cout << std::format("\tmov\t[rbp{:+}], eax\n", var_map.at(key));
+		if (var_map.at(key).type == TokenType::Bool) {
+			std::cout << "\tcmp\teax, 0\n";
+			std::cout << "\tmov\teax, 0\n";
+			std::cout << "\tsetne\tal\n";
+		}
+		std::cout << std::format("\tmov\t[rbp{:+}], eax\n", var_map.at(key).stack_index);
 	}
 	else if (node->type == ASTNodeType::CompoundAssign) {
 		auto caNode = static_cast<const CompoundAssignNode*>(node);
@@ -156,10 +161,17 @@ void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, int>& 
 			throw std::runtime_error("Failed to generate");
 		}
 		else if (caNode->op == TokenType::PlusEquals) {
-			std::cout << std::format("\tadd\t[rbp{}], eax\n", var_offset->second);
+			std::cout << std::format("\tadd\t[rbp{:+}], eax\n", var_offset->second.stack_index);
 		}
 		else if (caNode->op == TokenType::MinusEquals) {
-			std::cout << std::format("\tsub\t[rbp{}], eax\n", var_offset->second);
+			std::cout << std::format("\tsub\t[rbp{:+}], eax\n", var_offset->second.stack_index);
+		}
+		if (var_offset->second.type == TokenType::Bool) {
+			std::cout << std::format("\tmov\teax, [rbp{:+}]\n", var_offset->second.stack_index);
+			std::cout << "\tcmp\teax, 0\n";
+			std::cout << "\tmov\teax, 0\n";
+			std::cout << "\tsetne\tal\n";
+			std::cout << std::format("\tmov\t[rbp{:+}], eax\n", var_offset->second.stack_index);
 		}
 	}
 	else if (node->type == ASTNodeType::Var) {
@@ -169,7 +181,7 @@ void generateNodeAsm(const ASTNode* node, std::unordered_map<std::string, int>& 
 			std::cerr << "Variable '" << key << "' doesn't exist (in this scope)\n";
 			throw std::runtime_error("Failed to generate");
 		}
-		std::cout << std::format("\tmov\teax, [rbp{:+}]\n", var_map.at(key));
+		std::cout << std::format("\tmov\teax, [rbp{:+}]\n", var_map.at(key).stack_index);
 	}
 	else if (node->type == ASTNodeType::ConditionalExpr) {
 		auto cNode = static_cast<const ConditionalExprNode*>(node);
@@ -302,14 +314,19 @@ void generateStmtAsm(const ASTNode* stmt, Context& context) {
 void generateBlockItemAsm(const ASTNode* block_item, Context& context) {
 	if (block_item->type == ASTNodeType::Declaration) {
 		auto decl = static_cast<const DeclarationNode*>(block_item);
-		if (context.var_map.contains(decl->var_name)) {
-			std::cerr << "Declared '" << decl->var_name << "' twice\n";
+		if (context.var_map.contains(decl->info.name)) {
+			std::cerr << "Declared '" << decl->info.name << "' twice\n";
 			throw std::runtime_error("Failed to generate");
 		}
 		generateNodeAsm(decl->exp.get(), context.var_map);
+		if (decl->info.type == TokenType::Bool) {
+			std::cout << "\tcmp\teax, 0\n";
+			std::cout << "\tmov\teax, 0\n";
+			std::cout << "\tsetne\tal\n";
+		}
+		std::cout << "\tpush\trax\n";
 		context.stack_index -= 8;
-		std::cout << std::format("\tmov\t[rbp{}], eax\n", context.stack_index);
-		context.var_map.insert({decl->var_name, context.stack_index});
+		context.var_map.insert({ decl->info.name, {decl->info.type, context.stack_index} });
 	}
 	else {
 		generateStmtAsm(block_item, context);
@@ -329,14 +346,14 @@ void generateBlockAsm(const ASTNode* node, Context& context) {
 }
 
 void generateFuncAssembly(const FunctionNode* func) {
-	std::cout << func->name << ":\n";
+	std::cout << func->info.name << ":\n";
 	std::cout << "\tpush\trbp\n";
 	std::cout << "\tmov\trbp, rsp\n\n";
 	Context context;
 	int param_offset = 8;
 	for (const auto& param : func->params) {
 		param_offset += 8;
-		context.var_map.insert({ param, param_offset });
+		context.var_map.insert({ param.name, {param.type, param_offset } });
 	}
 	auto func_body = func->body.get();
 	if (func_body != nullptr) {
