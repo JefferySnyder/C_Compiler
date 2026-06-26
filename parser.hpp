@@ -95,11 +95,16 @@ struct ReturnStmtNode : public ASTNode {
 	};
 };
 
+struct Variable {
+	TokenType type;
+	std::string name;
+	Variable(TokenType t, std::string n) : type{ t }, name{ n } {};
+};
 struct DeclarationNode : public ASTNode {
-	std::string var_name;
+	Variable info;
 	std::unique_ptr<ASTNode> exp;
-	DeclarationNode(std::string vn, std::unique_ptr<ASTNode> e = nullptr) 
-		: var_name{ vn }, exp { std::move(e) }
+	DeclarationNode(Variable i, std::unique_ptr<ASTNode> e = nullptr) 
+		: info{ i }, exp { std::move(e) }
 	{
 		type = ASTNodeType::Declaration;
 	};
@@ -174,11 +179,11 @@ struct ContinueStmtNode : public ASTNode {
 };
 
 struct FunctionNode : public ASTNode {
-	std::string name;
-	std::vector<std::string> params;
+	Variable info;
+	std::vector<Variable> params;
 	std::unique_ptr<ASTNode> body; // CompoundStmt
-	FunctionNode(std::string n, std::vector<std::string> p, std::unique_ptr<ASTNode> b) 
-		: name{ n }, params{ std::move(p) }, body{std::move(b)}
+	FunctionNode(Variable i, std::vector<Variable> p, std::unique_ptr<ASTNode> b) 
+		: info{ i }, params{ std::move(p) }, body{std::move(b)}
 	{
 		type = ASTNodeType::Function;
 	}
@@ -196,6 +201,7 @@ struct ProgramNode : public ASTNode {
 class Parser {
 	std::vector<Token> tokens;
 	size_t index = 0;
+	std::unordered_set<TokenType> var_types{ TokenType::Int, TokenType::Bool };
 public:
 	explicit Parser(std::vector<Token> t) : tokens{ t } {};
 	std::unique_ptr<ProgramNode> parse() {
@@ -210,25 +216,28 @@ private:
 		return std::make_unique<ProgramNode>(std::move(funcs));
 	}
 	std::unique_ptr<FunctionNode> parse_func() {
-		ensure(TokenType::Int);
-		auto name = ensure(TokenType::Identifier);
+		auto var_type = ensure_var_type();
+		Variable func_info{ var_type, ensure(TokenType::Identifier) };
 		ensure(TokenType::OpenParen);
-		std::vector<std::string> params;
+		std::vector<Variable> params;
 		if (tokens[index].type != TokenType::CloseParen) {
-			ensure(TokenType::Int);
-			params.emplace_back(ensure(TokenType::Identifier));
+			auto type = ensure_var_type();
+			params.emplace_back(type, ensure(TokenType::Identifier));
 			while (tokens[index].type != TokenType::CloseParen) {
 				ensure(TokenType::Comma);
-				ensure(TokenType::Int);
-				params.emplace_back(ensure(TokenType::Identifier));
+				type = ensure_var_type();
+				params.emplace_back(type, ensure(TokenType::Identifier));
 			}
 		}
 		ensure(TokenType::CloseParen);
+		std::unique_ptr<ASTNode> block = nullptr;
 		if (tokens[index].type == TokenType::Semicolon) {
 			ensure(TokenType::Semicolon);
-			return std::make_unique<FunctionNode>(name, params, nullptr);
 		}
-		return std::make_unique<FunctionNode>(name, params, parse_block());
+		else {
+			block = parse_block();
+		}
+		return std::make_unique<FunctionNode>(func_info, params, std::move(block));
 	}
 	std::unique_ptr<ASTNode> parse_block() {
 		ensure(TokenType::OpenBrace);
@@ -243,7 +252,7 @@ private:
 	}
 	std::unique_ptr<ASTNode> parse_block_item() {
 		std::unique_ptr<ASTNode> res;
-		if (tokens[index].type == TokenType::Int) {
+		if (var_types.contains(tokens[index].type)) {
 			res = parse_declaration();
 		}
 		else {
@@ -252,16 +261,16 @@ private:
 		return res;
 	}
 	std::unique_ptr<ASTNode> parse_declaration() {
-		ensure(TokenType::Int);
-		auto var_name = ensure(TokenType::Identifier);
+		auto type = ensure_var_type();
+		Variable info{ type, ensure(TokenType::Identifier) };
 		std::unique_ptr<ASTNode> res;
 		if (tokens[index].type == TokenType::Assignment) {
 			ensure(TokenType::Assignment);
 			auto exp = parse_expr();
-			res = std::make_unique<DeclarationNode>(var_name, std::move(exp));
+			res = std::make_unique<DeclarationNode>(info, std::move(exp));
 		}
 		else {
-			res = std::make_unique<DeclarationNode>(var_name);
+			res = std::make_unique<DeclarationNode>(info);
 		}
 		ensure(TokenType::Semicolon);
 		return res;
@@ -296,7 +305,7 @@ private:
 			ensure(TokenType::For);
 			ensure(TokenType::OpenParen);
 			std::unique_ptr<ASTNode> init;
-			if (tokens[index].type == TokenType::Int) {
+			if (var_types.contains(tokens[index].type)) {
 				init = parse_declaration();
 			}
 			else {
@@ -459,6 +468,14 @@ private:
 			auto value = ensure(TokenType::IntegerLiteral);
 			return std::make_unique<LiteralNode>(std::stoi(value));
 		}
+		if (peek_tok_type == TokenType::True) {
+			auto value = ensure(TokenType::True);
+			return std::make_unique<LiteralNode>(1);
+		}
+		if (peek_tok_type == TokenType::False) {
+			auto value = ensure(TokenType::False);
+			return std::make_unique<LiteralNode>(0);
+		}
 		if (peek_tok_type == TokenType::Identifier) {
 			auto name = ensure(TokenType::Identifier);
 			if (tokens[index].type == TokenType::OpenParen) {
@@ -481,6 +498,14 @@ private:
 	}
 
 
+	TokenType ensure_var_type() {
+		auto var_type = tokens.at(index).type;
+		if (!var_types.contains(var_type)) {
+			fail();
+		}
+		index++;
+		return var_type;
+	}
 	std::string ensure(TokenType comp) {
 		if (tokens.at(index).type != comp) {
 			fail();
