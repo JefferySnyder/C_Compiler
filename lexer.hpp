@@ -41,10 +41,14 @@ enum class TokenType {
 	Break,
 	Continue,
 	Comma,
+	Bool,
+	True,
+	False,
 };
 std::unordered_map<std::string, TokenType> keywords{
 	{"return", TokenType::Return},
 	{"int", TokenType::Int},
+	{"bool", TokenType::Bool},
 	{"if", TokenType::If},
 	{"else", TokenType::Else},
 	{"for", TokenType::For},
@@ -52,6 +56,8 @@ std::unordered_map<std::string, TokenType> keywords{
 	{"do", TokenType::Do},
 	{"break", TokenType::Break},
 	{"continue", TokenType::Continue},
+	{"true", TokenType::True},
+	{"false", TokenType::False},
 };
 
 struct Token {
