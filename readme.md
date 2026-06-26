@@ -45,17 +45,17 @@ Or run the compiler by itself to read from the local input file: "input.c".
 
 Currently, the compiler supports a subset of the C99 standard, including:
 
-- Basic types: `int`
+- Basic types: `int`, `bool`
 - Control flow: `if`, `else`, including ternary expressions (e1 `?` e2 `:` e3)
 - Arithmetic and relational operators `+`, `-`, `*`, `/`, `==`, `<`, `>`, etc.
 - Control flow: `while` and `for` loops.
+- Function definitions and calls (including parameter passing).
 
 ### Work-In-Progress
 
 Features that are currently being, or will soon be, worked on:
 
-- Basic types: `bool`, `char`, and pointers.
-- Function definitions and calls (including parameter passing).
+- Basic types: `char`, and pointers.
 
 ## Known Limitations
 
