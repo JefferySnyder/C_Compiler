@@ -55,7 +55,7 @@ Currently, the compiler supports a subset of the C99 standard, including:
 
 Features that are currently being, or will soon be, worked on:
 
-- Basic types: `char`, and pointers.
+- Types: `char`, pointers, and arrays.
 
 ## Known Limitations
 
