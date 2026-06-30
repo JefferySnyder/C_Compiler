@@ -44,11 +44,15 @@ enum class TokenType {
 	Bool,
 	True,
 	False,
+	Char,
+	CharLiteral,
+	StringLiteral,
 };
 std::unordered_map<std::string, TokenType> keywords{
 	{"return", TokenType::Return},
 	{"int", TokenType::Int},
 	{"bool", TokenType::Bool},
+	{"char", TokenType::Char},
 	{"if", TokenType::If},
 	{"else", TokenType::Else},
 	{"for", TokenType::For},
@@ -141,6 +145,23 @@ std::vector<Token> tokenize(const std::string& source) {
 			i += 2; continue; 
 		}
 			
+		if (source[i] == '\'') {
+			i++;
+			char val = source.at(i++);
+			if (source.at(i++) != '\'')
+				tokens.push_back({ TokenType::Invalid, std::string{val} });
+			else
+				tokens.push_back({ TokenType::CharLiteral, std::string{val} });
+			continue;
+		}
+		if (source[i] == '\"') {
+			i++;
+			std::string val;
+			while (i < source.size() && source[i] != '\"') { val += source[i++]; }
+			tokens.push_back({ TokenType::StringLiteral, val });
+			i++;
+			continue;
+		}
 		if (std::isdigit(ch)) {
 			std::string val;
 			while (i < source.size() && std::isdigit(source[i])) { val += source[i++]; }
