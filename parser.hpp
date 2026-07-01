@@ -201,7 +201,7 @@ struct ProgramNode : public ASTNode {
 class Parser {
 	std::vector<Token> tokens;
 	size_t index = 0;
-	std::unordered_set<TokenType> var_types{ TokenType::Int, TokenType::Bool };
+	std::unordered_set<TokenType> var_types{ TokenType::Int, TokenType::Bool, TokenType::Char };
 public:
 	explicit Parser(std::vector<Token> t) : tokens{ t } {};
 	std::unique_ptr<ProgramNode> parse() {
@@ -466,6 +466,10 @@ private:
 		}
 		if (peek_tok_type == TokenType::IntegerLiteral) {
 			auto value = ensure(TokenType::IntegerLiteral);
+			return std::make_unique<LiteralNode>(std::stoi(value));
+		}
+		if (peek_tok_type == TokenType::CharLiteral) {
+			auto value = ensure(TokenType::CharLiteral);
 			return std::make_unique<LiteralNode>(std::stoi(value));
 		}
 		if (peek_tok_type == TokenType::True) {
