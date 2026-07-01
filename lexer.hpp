@@ -151,7 +151,7 @@ std::vector<Token> tokenize(const std::string& source) {
 			if (source.at(i++) != '\'')
 				tokens.push_back({ TokenType::Invalid, std::string{val} });
 			else
-				tokens.push_back({ TokenType::CharLiteral, std::string{val} });
+				tokens.push_back({ TokenType::CharLiteral, std::to_string(val) });
 			continue;
 		}
 		if (source[i] == '\"') {
